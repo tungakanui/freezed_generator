@@ -1,11 +1,14 @@
 import 'dart:convert';
 
 import 'package:clipboard/clipboard.dart';
+import 'package:code_text_field/code_text_field.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_highlight/flutter_highlight.dart';
 import 'package:flutter_highlight/themes/atom-one-light.dart';
+import 'package:flutter_highlight/themes/vs2015.dart';
+import 'package:highlight/languages/yaml.dart';
 import 'package:recase/recase.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -145,6 +148,29 @@ class _MyHomePageState extends State<MyHomePage> {
   String className = "";
   String input = "";
 
+  late CodeController _codeController;
+
+  @override
+  void initState() {
+    super.initState();
+    _codeController = CodeController(
+        text: "",
+        language: yaml,
+        theme: vs2015Theme,
+        onChange: (v) {
+          input = v;
+          try {
+            setState(() {
+              process();
+            });
+          } catch (e) {
+            setState(() {
+              output = errorString;
+            });
+          }
+        });
+  }
+
   void process() {
     output = "";
     output += "import 'package:freezed_annotation/freezed_annotation.dart';\n";
@@ -226,37 +252,11 @@ class _MyHomePageState extends State<MyHomePage> {
                         ),
                         const SizedBox(height: 12),
                         Expanded(
-                          child: TextFormField(
-                            style: const TextStyle(color: Colors.white),
+                          child: CodeField(
+                            controller: _codeController,
                             expands: true,
                             maxLines: null,
                             minLines: null,
-                            textAlign: TextAlign.start,
-                            textAlignVertical: TextAlignVertical.top,
-                            decoration: const InputDecoration(
-                              hintText: "Json",
-                              hintStyle: TextStyle(color: Colors.white),
-                              focusedBorder: OutlineInputBorder(
-                                borderSide:
-                                    BorderSide(color: greenColor, width: 1.0),
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderSide: BorderSide(
-                                    color: Color(0xFFFFD166), width: 1.0),
-                              ),
-                            ),
-                            onChanged: (v) {
-                              input = v;
-                              try {
-                                setState(() {
-                                  process();
-                                });
-                              } catch (e) {
-                                setState(() {
-                                  output = errorString;
-                                });
-                              }
-                            },
                           ),
                         ),
                       ],
@@ -272,11 +272,15 @@ class _MyHomePageState extends State<MyHomePage> {
                           ),
                         )
                       : SingleChildScrollView(
-                          child: HighlightView(
-                            output,
-                            language: 'dart',
-                            theme: atomOneLightTheme,
-                            padding: const EdgeInsets.all(12),
+                          child: Padding(
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 16.0),
+                            child: HighlightView(
+                              output,
+                              language: 'dart',
+                              theme: atomOneLightTheme,
+                              padding: const EdgeInsets.all(12),
+                            ),
                           ),
                         ),
                 ),
