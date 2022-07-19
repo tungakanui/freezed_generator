@@ -1,13 +1,20 @@
 import 'dart:convert';
 
+import 'package:clipboard/clipboard.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_highlight/flutter_highlight.dart';
+import 'package:flutter_highlight/themes/atom-one-light.dart';
 import 'package:recase/recase.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 void main() {
   runApp(const MyApp());
 }
 
-const errorString = "JSON????";
+const errorString = "Can't parse JSON";
+final Uri _url = Uri.parse('https://fb.com/tungakanuiii');
 
 class MyApp extends StatelessWidget {
   const MyApp({Key? key}) : super(key: key);
@@ -16,17 +23,8 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
+      title: 'Freezed Generator',
       theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // Try running your application with "flutter run". You'll see the
-        // application has a blue toolbar. Then, without quitting the app, try
-        // changing the primarySwatch below to Colors.green and then invoke
-        // "hot reload" (press "r" in the console where you ran "flutter run",
-        // or simply save your changes to "hot reload" in a Flutter IDE).
-        // Notice that the counter didn't reset back to zero; the application
-        // is not restarted.
         primarySwatch: Colors.blue,
       ),
       home: const MyHomePage(),
@@ -36,6 +34,8 @@ class MyApp extends StatelessWidget {
 
 String output = "";
 
+List<String> classNames = [];
+
 const String template = """
 @freezed
 class {className} with _\${className} {
@@ -44,13 +44,32 @@ class {className} with _\${className} {
     }) = _{className};
 
     factory {className}.fromJson(Map<String, dynamic> json) => _\${className}FromJson(json);
-}
+}\n
 """;
+
+String getNameIfExist(String className) {
+  String copyName = className;
+  if (classNames.contains(className)) {
+    var x = 2;
+    while (output.contains("$className$x")) {
+      x++;
+    }
+    copyName = '$className$x';
+  }
+  return copyName.camelCase.titleCase;
+}
 
 void fromJsonToObject(Map<String, dynamic> json, String className) {
   String fields = "";
+
   for (var element in json.entries) {
-    if (element.value is String) {
+    if (element.value == null) {
+      if (element.key.contains('_') || element.key.startsWith(r"$")) {
+        fields += '@JsonKey(name: "${element.key}") ';
+      }
+      fields +=
+          'final dynamic ${element.key.replaceAll("\$", "").camelCase},\n';
+    } else if (element.value is String) {
       if (element.key.contains('_') || element.key.startsWith(r"$")) {
         fields += '@JsonKey(name: "${element.key}") ';
       }
@@ -73,25 +92,38 @@ void fromJsonToObject(Map<String, dynamic> json, String className) {
       }
       fields += 'final bool? ${element.key.replaceAll("\$", "").camelCase},\n';
     } else if (element.value is Map) {
+      final name = getNameIfExist(element.key.camelCase.titleCase);
       if (element.key.contains('_') || element.key.startsWith(r"$")) {
         fields +=
-            '@JsonKey(name: "${element.key}") final ${element.key.camelCase.titleCase}? ${element.key.replaceAll("\$", "").camelCase},\n';
+            '@JsonKey(name: "${element.key}") final $name? ${element.key.replaceAll("\$", "").camelCase},\n';
       } else {
         fields +=
-            'final ${element.key.camelCase.titleCase}? ${element.key.replaceAll("\$", "").camelCase},\n';
+            'final $name? ${element.key.replaceAll("\$", "").camelCase},\n';
       }
-      fromJsonToObject(
-          element.value, element.key.replaceAll("\$", "").camelCase.titleCase);
+      classNames.add(name);
+      fromJsonToObject(element.value, name);
     } else if (element.value is List) {
+      final name = getNameIfExist(element.key.camelCase.titleCase);
       if (element.key.contains('_') || element.key.startsWith(r"$")) {
         fields +=
-            '@JsonKey(name: "${element.key}") final List<${element.key.camelCase.titleCase}>? ${element.key.replaceAll("\$", "").camelCase},\n';
+            '@JsonKey(name: "${element.key}") final List<$name>? ${element.key.replaceAll("\$", "").camelCase},\n';
       } else {
         fields +=
-            'final List<${element.key.camelCase.titleCase}>? ${element.key.replaceAll("\$", "").camelCase},\n';
+            'final List<$name>? ${element.key.replaceAll("\$", "").camelCase},\n';
       }
-      fromJsonToObject((element.value as List<Map<String, dynamic>>).first,
-          element.key.replaceAll("\$", "").camelCase);
+      classNames.add(name);
+      final List data = element.value as List<dynamic>;
+      if (data.isNotEmpty) {
+        fromJsonToObject(
+          (element.value as List<dynamic>).first as Map<String, dynamic>,
+          name,
+        );
+      } else {
+        fromJsonToObject(
+          {},
+          name,
+        );
+      }
     }
   }
 
@@ -99,6 +131,8 @@ void fromJsonToObject(Map<String, dynamic> json, String className) {
       .replaceAll('{className}', className)
       .replaceAll('{field}', fields.replaceAll('"\$', '"\\\$'));
 }
+
+const Color greenColor = Color(0xFF06D6A0);
 
 class MyHomePage extends StatefulWidget {
   const MyHomePage({Key? key}) : super(key: key);
@@ -123,57 +157,152 @@ class _MyHomePageState extends State<MyHomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Row(
-        children: [
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  TextField(
-                    decoration: const InputDecoration(hintText: "Class name"),
-                    onChanged: (v) {
-                      setState(() {
-                        className = v;
-                        process();
-                      });
-                    },
-                  ),
-                  Expanded(
-                    child: TextFormField(
-                      expands: true,
-                      maxLines: null,
-                      minLines: null,
-                      decoration: const InputDecoration(hintText: "Json"),
-                      onChanged: (v) {
-                        input = v;
-                        try {
-                          setState(() {
-                            process();
-                          });
-                        } catch (e) {
-                          setState(() {
-                            output = errorString;
-                          });
-                        }
-                      },
-                    ),
-                  ),
-                ],
+      floatingActionButtonLocation: FloatingActionButtonLocation.endTop,
+      floatingActionButton: CupertinoButton(
+        onPressed: () {
+          FlutterClipboard.copy(output);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                "Copied!",
+                style: TextStyle(fontSize: 16),
               ),
+              duration: Duration(seconds: 1),
+              backgroundColor: greenColor,
+            ),
+          );
+        },
+        child: PhysicalModel(
+          elevation: 16,
+          color: greenColor,
+          shadowColor: greenColor.withOpacity(0.6),
+          shape: BoxShape.circle,
+          child: Container(
+            decoration: const BoxDecoration(
+              color: greenColor,
+              shape: BoxShape.circle,
+            ),
+            padding: const EdgeInsets.all(16),
+            child: const Icon(
+              Icons.copy,
+              color: Colors.white,
             ),
           ),
-          const VerticalDivider(),
+        ),
+      ),
+      body: Column(
+        children: [
           Expanded(
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              child: Center(
-                child: SelectableText(
-                  output,
-                  style: TextStyle(
-                    color: output == errorString ? Colors.red : Colors.black,
+            child: Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    color: const Color(0xFF26547C),
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      children: [
+                        TextField(
+                          style: const TextStyle(color: Colors.white),
+                          decoration: const InputDecoration(
+                            hintText: "Class name",
+                            focusedBorder: OutlineInputBorder(
+                              borderSide:
+                                  BorderSide(color: greenColor, width: 1.0),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderSide: BorderSide(
+                                  color: Color(0xFFFFD166), width: 1.0),
+                            ),
+                            hintStyle: TextStyle(color: Colors.white),
+                          ),
+                          onChanged: (v) {
+                            setState(() {
+                              classNames.clear();
+                              classNames.add(v.titleCase);
+                              className = v.titleCase;
+                              process();
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        Expanded(
+                          child: TextFormField(
+                            style: const TextStyle(color: Colors.white),
+                            expands: true,
+                            maxLines: null,
+                            minLines: null,
+                            textAlign: TextAlign.start,
+                            textAlignVertical: TextAlignVertical.top,
+                            decoration: const InputDecoration(
+                              hintText: "Json",
+                              hintStyle: TextStyle(color: Colors.white),
+                              focusedBorder: OutlineInputBorder(
+                                borderSide:
+                                    BorderSide(color: greenColor, width: 1.0),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderSide: BorderSide(
+                                    color: Color(0xFFFFD166), width: 1.0),
+                              ),
+                            ),
+                            onChanged: (v) {
+                              input = v;
+                              try {
+                                setState(() {
+                                  process();
+                                });
+                              } catch (e) {
+                                setState(() {
+                                  output = errorString;
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
+                Expanded(
+                  child: output == errorString
+                      ? const Center(
+                          child: Text(
+                            errorString,
+                            style: TextStyle(color: Color(0xFFEF476F)),
+                          ),
+                        )
+                      : SingleChildScrollView(
+                          child: HighlightView(
+                            output,
+                            language: 'dart',
+                            theme: atomOneLightTheme,
+                            padding: const EdgeInsets.all(12),
+                          ),
+                        ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: RichText(
+              text: TextSpan(
+                children: [
+                  const TextSpan(
+                    text: 'by @tungakanui ',
+                    style: TextStyle(color: Colors.black),
+                  ),
+                  TextSpan(
+                    text: 'Facebook',
+                    style: const TextStyle(color: Colors.blue),
+                    recognizer: TapGestureRecognizer()
+                      ..onTap = () async {
+                        if (!await launchUrl(_url)) {
+                          throw 'Could not launch $_url';
+                        }
+                      },
+                  ),
+                ],
               ),
             ),
           ),
