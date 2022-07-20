@@ -51,80 +51,82 @@ class {className} with _\${className} {
 """;
 
 String getNameIfExist(String className) {
-  String copyName = className;
-  if (classNames.contains(className)) {
+  String copyName = titleKey(className.camelCase.titleCase);
+  if (classNames.contains(copyName)) {
     var x = 2;
-    while (output.contains("$className$x")) {
+    while (output.contains("$copyName$x")) {
       x++;
     }
-    copyName = '$className$x';
+    copyName = '$copyName$x';
   }
-  return copyName.camelCase.titleCase;
+  return copyName;
 }
 
 void fromJsonToObject(Map<String, dynamic> json, String className) {
   String fields = "";
 
-  for (var element in json.entries) {
-    if (element.value == null) {
-      if (element.key.contains('_') || element.key.startsWith(r"$")) {
-        fields += '@JsonKey(name: "${element.key}") ';
+  for (var key in json.keys) {
+    print(key);
+    if (json[key] == null) {
+      if (key.contains('_') || key.startsWith(r"$")) {
+        fields += '@JsonKey(name: "${key}") ';
       }
       fields +=
-          'final dynamic ${element.key.replaceAll("\$", "").camelCase},\n';
-    } else if (element.value is String) {
-      if (element.key.contains('_') || element.key.startsWith(r"$")) {
-        fields += '@JsonKey(name: "${element.key}") ';
+          'final dynamic ${key.replaceAll("\$", "").camelCase},\n';
+    } else if (json[key] is String) {
+      if (key.contains('_') || key.startsWith(r"$")) {
+        fields += '@JsonKey(name: "${key}") ';
       }
       fields +=
-          'final String? ${element.key.replaceAll("\$", "").camelCase},\n';
-    } else if (element.value is int) {
-      if (element.key.contains('_') || element.key.startsWith(r"$")) {
-        fields += '@JsonKey(name: "${element.key}") ';
+          'final String? ${key.replaceAll("\$", "").camelCase},\n';
+    } else if (json[key] is int) {
+      if (key.contains('_') || key.startsWith(r"$")) {
+        fields += '@JsonKey(name: "${key}") ';
       }
-      fields += 'final int? ${element.key.replaceAll("\$", "").camelCase},\n';
-    } else if (element.value is double) {
-      if (element.key.contains('_') || element.key.startsWith(r"$")) {
-        fields += '@JsonKey(name: "${element.key}") ';
+      fields += 'final int? ${key.replaceAll("\$", "").camelCase},\n';
+    } else if (json[key] is double) {
+      if (key.contains('_') || key.startsWith(r"$")) {
+        fields += '@JsonKey(name: "${key}") ';
       }
       fields +=
-          'final double? ${element.key.replaceAll("\$", "").camelCase},\n';
-    } else if (element.value is bool) {
-      if (element.key.contains('_') || element.key.startsWith(r"$")) {
-        fields += '@JsonKey(name: "${element.key}") ';
+          'final double? ${key.replaceAll("\$", "").camelCase},\n';
+    } else if (json[key] is bool) {
+      if (key.contains('_') || key.startsWith(r"$")) {
+        fields += '@JsonKey(name: "${key}") ';
       }
-      fields += 'final bool? ${element.key.replaceAll("\$", "").camelCase},\n';
-    } else if (element.value is Map) {
-      final name = getNameIfExist(element.key.camelCase.titleCase);
-      if (element.key.contains('_') || element.key.startsWith(r"$")) {
+      fields += 'final bool? ${key.replaceAll("\$", "").camelCase},\n';
+    } else if (json[key] is Map) {
+
+      final name = getNameIfExist(key);
+      if (key.contains('_') || key.startsWith(r"$")) {
         fields +=
-            '@JsonKey(name: "${element.key}") final $name? ${element.key.replaceAll("\$", "").camelCase},\n';
+            '@JsonKey(name: "$key") final $name? ${key.replaceAll("\$", "").camelCase},\n';
       } else {
         fields +=
-            'final $name? ${element.key.replaceAll("\$", "").camelCase},\n';
+            'final $name? ${key.replaceAll("\$", "").camelCase},\n';
       }
       classNames.add(name);
-      fromJsonToObject(element.value, name);
-    } else if (element.value is List) {
-      final name = getNameIfExist(element.key.camelCase.titleCase);
-      if (element.key.contains('_') || element.key.startsWith(r"$")) {
+      fromJsonToObject(json[key], name);
+    } else if (json[key] is List) {
+      final name = getNameIfExist(key);
+      if (key.contains('_') || key.startsWith(r"$")) {
         fields +=
-            '@JsonKey(name: "${element.key}") final List<$name>? ${element.key.replaceAll("\$", "").camelCase},\n';
+            '@JsonKey(name: "$key") final List<$name>? ${key.replaceAll("\$", "").camelCase},\n';
       } else {
         fields +=
-            'final List<$name>? ${element.key.replaceAll("\$", "").camelCase},\n';
+            'final List<$name>? ${key.replaceAll("\$", "").camelCase},\n';
       }
-      classNames.add(name);
-      final List data = element.value as List<dynamic>;
+      classNames.add(titleKey(name));
+      final List data = json[key] as List<dynamic>;
       if (data.isNotEmpty) {
         fromJsonToObject(
-          (element.value as List<dynamic>).first as Map<String, dynamic>,
-          name,
+          (json[key] as List<dynamic>).first as Map<String, dynamic>,
+          titleKey(name),
         );
       } else {
         fromJsonToObject(
           {},
-          name,
+          titleKey(name),
         );
       }
     }
@@ -136,6 +138,8 @@ void fromJsonToObject(Map<String, dynamic> json, String className) {
 }
 
 const Color greenColor = Color(0xFF06D6A0);
+
+String titleKey(String val) => val.titleCase.split(" ").join();
 
 class MyHomePage extends StatefulWidget {
   const MyHomePage({Key? key}) : super(key: key);
@@ -172,6 +176,8 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   void process() {
+    if (input.isEmpty) return;
+    classNames = [];
     output = "";
     output += "import 'package:freezed_annotation/freezed_annotation.dart';\n";
     output += "part '${className.snakeCase}.freezed.dart';\n";
@@ -244,8 +250,8 @@ class _MyHomePageState extends State<MyHomePage> {
                           onChanged: (v) {
                             setState(() {
                               classNames.clear();
-                              classNames.add(v.titleCase);
-                              className = v.titleCase;
+                              classNames.add(titleKey(v));
+                              className = titleKey(v);
                               process();
                             });
                           },
