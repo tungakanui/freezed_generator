@@ -71,14 +71,12 @@ void fromJsonToObject(Map<String, dynamic> json, String className) {
       if (key.contains('_') || key.startsWith(r"$")) {
         fields += '@JsonKey(name: "$key") ';
       }
-      fields +=
-          'final dynamic ${key.replaceAll("\$", "").camelCase},\n';
+      fields += 'final dynamic ${key.replaceAll("\$", "").camelCase},\n';
     } else if (json[key] is String) {
       if (key.contains('_') || key.startsWith(r"$")) {
         fields += '@JsonKey(name: "$key") ';
       }
-      fields +=
-          'final String? ${key.replaceAll("\$", "").camelCase},\n';
+      fields += 'final String? ${key.replaceAll("\$", "").camelCase},\n';
     } else if (json[key] is int) {
       if (key.contains('_') || key.startsWith(r"$")) {
         fields += '@JsonKey(name: "$key") ';
@@ -88,75 +86,78 @@ void fromJsonToObject(Map<String, dynamic> json, String className) {
       if (key.contains('_') || key.startsWith(r"$")) {
         fields += '@JsonKey(name: "$key") ';
       }
-      fields +=
-          'final double? ${key.replaceAll("\$", "").camelCase},\n';
+      fields += 'final double? ${key.replaceAll("\$", "").camelCase},\n';
     } else if (json[key] is bool) {
       if (key.contains('_') || key.startsWith(r"$")) {
         fields += '@JsonKey(name: "$key") ';
       }
       fields += 'final bool? ${key.replaceAll("\$", "").camelCase},\n';
     } else if (json[key] is Map) {
-
       final name = getNameIfExist(key);
       if (key.contains('_') || key.startsWith(r"$")) {
         fields +=
             '@JsonKey(name: "$key") final $name? ${key.replaceAll("\$", "").camelCase},\n';
       } else {
-        fields +=
-            'final $name? ${key.replaceAll("\$", "").camelCase},\n';
+        fields += 'final $name? ${key.replaceAll("\$", "").camelCase},\n';
       }
       classNames.add(name);
       fromJsonToObject(json[key], name);
     } else if (json[key] is List) {
-      final name = getNameIfExist(key);
-      if (json[key].first is String) {
+      if ((json[key] as List).isEmpty) {
         if (key.contains('_') || key.startsWith(r"$")) {
           fields +=
-          '@JsonKey(name: "$key") final List<String>? ${key.replaceAll("\$", "").camelCase},\n';
+              '@JsonKey(name: "$key") final List<dynamic>? ${key.replaceAll("\$", "").camelCase},\n';
         } else {
           fields +=
-          'final List<String>? ${key.replaceAll("\$", "").camelCase},\n';
+              'final List<dynamic>? ${key.replaceAll("\$", "").camelCase},\n';
+        }
+      } else if (json[key].first is String) {
+        if (key.contains('_') || key.startsWith(r"$")) {
+          fields +=
+              '@JsonKey(name: "$key") final List<String>? ${key.replaceAll("\$", "").camelCase},\n';
+        } else {
+          fields +=
+              'final List<String>? ${key.replaceAll("\$", "").camelCase},\n';
         }
       } else if (json[key].first is int) {
         if (key.contains('_') || key.startsWith(r"$")) {
           fields +=
-          '@JsonKey(name: "$key") final List<int>? ${key.replaceAll("\$", "").camelCase},\n';
+              '@JsonKey(name: "$key") final List<int>? ${key.replaceAll("\$", "").camelCase},\n';
         } else {
-          fields +=
-          'final List<int>? ${key.replaceAll("\$", "").camelCase},\n';
+          fields += 'final List<int>? ${key.replaceAll("\$", "").camelCase},\n';
         }
       } else if (json[key].first is double) {
         if (key.contains('_') || key.startsWith(r"$")) {
           fields +=
-          '@JsonKey(name: "$key") final List<double>? ${key.replaceAll("\$", "").camelCase},\n';
+              '@JsonKey(name: "$key") final List<double>? ${key.replaceAll("\$", "").camelCase},\n';
         } else {
           fields +=
-          'final List<double>? ${key.replaceAll("\$", "").camelCase},\n';
+              'final List<double>? ${key.replaceAll("\$", "").camelCase},\n';
         }
       } else if (json[key].first is bool) {
         if (key.contains('_') || key.startsWith(r"$")) {
           fields +=
-          '@JsonKey(name: "$key") final List<bool>? ${key.replaceAll("\$", "").camelCase},\n';
+              '@JsonKey(name: "$key") final List<bool>? ${key.replaceAll("\$", "").camelCase},\n';
         } else {
           fields +=
-          'final List<bool>? ${key.replaceAll("\$", "").camelCase},\n';
+              'final List<bool>? ${key.replaceAll("\$", "").camelCase},\n';
         }
       } else if (json[key].first is List) {
         if (key.contains('_') || key.startsWith(r"$")) {
           fields +=
-          '@JsonKey(name: "$key") final List<List<dynamic>>? ${key.replaceAll("\$", "").camelCase},\n';
+              '@JsonKey(name: "$key") final List<List<dynamic>>? ${key.replaceAll("\$", "").camelCase},\n';
         } else {
           fields +=
-          'final List<List<dynamic>>? ${key.replaceAll("\$", "").camelCase},\n';
+              'final List<List<dynamic>>? ${key.replaceAll("\$", "").camelCase},\n';
         }
       } else if (json[key].first is Map) {
         final name = getNameIfExist(key.camelCase.titleCase);
         if (key.contains('_') || key.startsWith(r"$")) {
           fields +=
-          '@JsonKey(name: "$key") final List<$name>? ${key.replaceAll("\$", "").camelCase},\n';
+              '@JsonKey(name: "$key") final List<$name>? ${key.replaceAll("\$", "").camelCase},\n';
         } else {
           fields +=
-          'final List<$name>? ${key.replaceAll("\$", "").camelCase},\n';
+              'final List<$name>? ${key.replaceAll("\$", "").camelCase},\n';
         }
         classNames.add(name);
         final List data = json[key] as List<dynamic>;
