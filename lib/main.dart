@@ -1,12 +1,9 @@
 import 'dart:convert';
 
-import 'package:clipboard/clipboard.dart';
 import 'package:code_text_field/code_text_field.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_highlight/flutter_highlight.dart';
-import 'package:flutter_highlight/themes/atom-one-light.dart';
 import 'package:flutter_highlight/themes/vs2015.dart';
 import 'package:highlight/languages/yaml.dart';
 import 'package:recase/recase.dart';
@@ -17,7 +14,7 @@ void main() {
 }
 
 const errorString = "Can't parse JSON";
-final Uri _url = Uri.parse('https://fb.com/tungakanuiii');
+final Uri _url = Uri.parse('https://www.facebook.com/phamdanh.quyen/');
 
 class MyApp extends StatelessWidget {
   const MyApp({Key? key}) : super(key: key);
@@ -26,7 +23,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Freezed Generator',
+      title: 'Json To Dart Generator',
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
@@ -40,13 +37,22 @@ String output = "";
 List<String> classNames = [];
 
 const String template = """
-@freezed
-class {className} with _\${className} {
-    const factory {className}({
-       {field}
-    }) = _{className};
+class {className} extends Equatable {
+  {finalField}
+  const {className}({
+    {field}
+  });
 
-    factory {className}.fromJson(Map<String, dynamic> json) => _\${className}FromJson(json);
+  factory {className}.fromJson(Map<String, dynamic> json) => _\${className}FromJson(json);
+
+  
+
+  @override
+  List<Object?> get props {
+    return [
+      {props}
+    ];
+  }
 }\n
 """;
 
@@ -64,96 +70,58 @@ String getNameIfExist(String className) {
 
 void fromJsonToObject(Map<String, dynamic> json, String className) {
   String fields = "";
+  String finalFields = "";
+  String props = "";
 
   for (var key in json.keys) {
     print(key);
     if (json[key] == null) {
-      if (key.contains('_') || key.startsWith(r"$")) {
-        fields += '@JsonKey(name: "$key") ';
-      }
-      fields += 'dynamic ${key.replaceAll("\$", "").camelCase},\n';
+      finalFields += 'final dynamic ${key.camelCase};\n';
+      fields += 'this.${key.camelCase},\n';
     } else if (json[key] is String) {
-      if (key.contains('_') || key.startsWith(r"$")) {
-        fields += '@JsonKey(name: "$key") ';
-      }
-      fields += 'String? ${key.replaceAll("\$", "").camelCase},\n';
+      finalFields += 'final String? ${key.camelCase};\n';
+      fields += 'this.${key.camelCase},\n';
     } else if (json[key] is int) {
-      if (key.contains('_') || key.startsWith(r"$")) {
-        fields += '@JsonKey(name: "$key") ';
-      }
-      fields += 'int? ${key.replaceAll("\$", "").camelCase},\n';
+      finalFields += 'final num? ${key.camelCase};\n';
+      fields += 'this.${key.camelCase},\n';
     } else if (json[key] is double) {
-      if (key.contains('_') || key.startsWith(r"$")) {
-        fields += '@JsonKey(name: "$key") ';
-      }
-      fields += 'double? ${key.replaceAll("\$", "").camelCase},\n';
+      finalFields += 'final num? ${key.camelCase};\n';
+      fields += 'this.${key.camelCase},\n';
     } else if (json[key] is bool) {
-      if (key.contains('_') || key.startsWith(r"$")) {
-        fields += '@JsonKey(name: "$key") ';
-      }
-      fields += 'bool? ${key.replaceAll("\$", "").camelCase},\n';
+      finalFields += 'final bool? ${key.camelCase};\n';
+      fields += 'this.${key.camelCase},\n';
     } else if (json[key] is Map) {
       final name = getNameIfExist(key);
-      if (key.contains('_') || key.startsWith(r"$")) {
-        fields +=
-            '@JsonKey(name: "$key") $name? ${key.replaceAll("\$", "").camelCase},\n';
-      } else {
-        fields += '$name? ${key.replaceAll("\$", "").camelCase},\n';
-      }
+      finalFields += 'final $name? ${key.camelCase};\n';
+      fields += 'this.${key.camelCase},\n';
       classNames.add(name);
       fromJsonToObject(json[key], name);
     } else if (json[key] is List) {
       if ((json[key] as List).isEmpty) {
-        if (key.contains('_') || key.startsWith(r"$")) {
-          fields +=
-              '@JsonKey(name: "$key") List<dynamic>? ${key.replaceAll("\$", "").camelCase},\n';
-        } else {
-          fields += 'List<dynamic>? ${key.replaceAll("\$", "").camelCase},\n';
-        }
+        finalFields += 'final List<dynamic>? ${key.camelCase};\n';
+        fields += 'this.${key.camelCase},\n';
       } else if (json[key].first is String) {
-        if (key.contains('_') || key.startsWith(r"$")) {
-          fields +=
-              '@JsonKey(name: "$key") List<String>? ${key.replaceAll("\$", "").camelCase},\n';
-        } else {
-          fields += 'List<String>? ${key.replaceAll("\$", "").camelCase},\n';
-        }
+        finalFields += 'final List<String>? ${key.camelCase};\n';
+        fields += 'this.${key.camelCase},\n';
       } else if (json[key].first is int) {
-        if (key.contains('_') || key.startsWith(r"$")) {
-          fields +=
-              '@JsonKey(name: "$key") List<int>? ${key.replaceAll("\$", "").camelCase},\n';
-        } else {
-          fields += 'List<int>? ${key.replaceAll("\$", "").camelCase},\n';
-        }
+        finalFields += 'final List<num>? ${key.camelCase};\n';
+
+        fields += 'this.${key.camelCase},\n';
       } else if (json[key].first is double) {
-        if (key.contains('_') || key.startsWith(r"$")) {
-          fields +=
-              '@JsonKey(name: "$key") List<double>? ${key.replaceAll("\$", "").camelCase},\n';
-        } else {
-          fields += 'List<double>? ${key.replaceAll("\$", "").camelCase},\n';
-        }
+        finalFields += 'final List<num>? ${key.camelCase};\n';
+
+        fields += 'this.${key.camelCase},\n';
       } else if (json[key].first is bool) {
-        if (key.contains('_') || key.startsWith(r"$")) {
-          fields +=
-              '@JsonKey(name: "$key") List<bool>? ${key.replaceAll("\$", "").camelCase},\n';
-        } else {
-          fields += 'List<bool>? ${key.replaceAll("\$", "").camelCase},\n';
-        }
+        finalFields += 'final List<bool>? ${key.camelCase};\n';
+
+        fields += 'this.${key.camelCase},\n';
       } else if (json[key].first is List) {
-        if (key.contains('_') || key.startsWith(r"$")) {
-          fields +=
-              '@JsonKey(name: "$key") List<List<dynamic>>? ${key.replaceAll("\$", "").camelCase},\n';
-        } else {
-          fields +=
-              'List<List<dynamic>>? ${key.replaceAll("\$", "").camelCase},\n';
-        }
+        finalFields += 'final List<List<dynamic>>? ${key.camelCase};\n';
+        fields += 'this.${key.camelCase},\n';
       } else if (json[key].first is Map) {
         final name = getNameIfExist(key.camelCase.titleCase);
-        if (key.contains('_') || key.startsWith(r"$")) {
-          fields +=
-              '@JsonKey(name: "$key") List<$name>? ${key.replaceAll("\$", "").camelCase},\n';
-        } else {
-          fields += 'List<$name>? ${key.replaceAll("\$", "").camelCase},\n';
-        }
+        finalFields += 'final List<$name>? ${key.camelCase};\n';
+        fields += 'this.${key.camelCase},\n';
         classNames.add(name);
         final List data = json[key] as List<dynamic>;
         if (data.isNotEmpty) {
@@ -168,33 +136,15 @@ void fromJsonToObject(Map<String, dynamic> json, String className) {
           );
         }
       }
-
-      // if (key.contains('_') || key.startsWith(r"$")) {
-      //   fields +=
-      //       '@JsonKey(name: "$key") final List<$name>? ${key.replaceAll("\$", "").camelCase},\n';
-      // } else {
-      //   fields +=
-      //       'final List<$name>? ${key.replaceAll("\$", "").camelCase},\n';
-      // }
-      // classNames.add(titleKey(name));
-      // final List data = json[key] as List<dynamic>;
-      // if (data.isNotEmpty) {
-      //   fromJsonToObject(
-      //     (json[key] as List<dynamic>).first as Map<String, dynamic>,
-      //     titleKey(name),
-      //   );
-      // } else {
-      //   fromJsonToObject(
-      //     {},
-      //     titleKey(name),
-      //   );
-      // }
     }
+    props += '${key.camelCase},\n';
   }
 
   output += template
       .replaceAll('{className}', className)
-      .replaceAll('{field}', fields.replaceAll('"\$', '"\\\$'));
+      .replaceAll('{finalField}', finalFields)
+      .replaceAll('{props}', props)
+      .replaceAll('{field}', fields);
 }
 
 const Color greenColor = Color(0xFF06D6A0);
@@ -213,37 +163,33 @@ class _MyHomePageState extends State<MyHomePage> {
   String input = "";
 
   late CodeController _codeController;
+  late CodeController _outPutController;
 
   @override
   void initState() {
     super.initState();
     _codeController = CodeController(
-        text: "",
-        language: yaml,
-        theme: vs2015Theme,
-        onChange: (v) {
-          input = v;
-          try {
-            setState(() {
-              process();
-            });
-          } catch (e) {
-            setState(() {
-              output = errorString;
-            });
-          }
-        });
+      text: "",
+      language: yaml,
+      patternMap: vs2015Theme,
+      stringMap: vs2015Theme,
+    );
+    _outPutController = CodeController(
+      text: "",
+      language: yaml,
+      patternMap: vs2015Theme,
+      stringMap: vs2015Theme,
+    );
   }
 
   void process() {
     if (input.isEmpty) return;
     classNames = [];
     output = "";
-    output += "import 'package:freezed_annotation/freezed_annotation.dart';\n";
-    output += "part '${className.snakeCase}.freezed.dart';\n";
-    output += "part '${className.snakeCase}.g.dart';\n\n";
+    output += "import 'package:equatable/equatable.dart';\n\n";
     final js = jsonDecode(input);
     fromJsonToObject(js, className);
+    _outPutController.text = output;
   }
 
   @override
@@ -320,6 +266,18 @@ class _MyHomePageState extends State<MyHomePage> {
                         Expanded(
                           child: CodeField(
                             controller: _codeController,
+                            onChanged: (v) {
+                              input = v;
+                              try {
+                                setState(() {
+                                  process();
+                                });
+                              } catch (e) {
+                                setState(() {
+                                  output = errorString;
+                                });
+                              }
+                            },
                             expands: true,
                             maxLines: null,
                             minLines: null,
@@ -330,26 +288,34 @@ class _MyHomePageState extends State<MyHomePage> {
                   ),
                 ),
                 Expanded(
-                  child: output == errorString
-                      ? const Center(
-                          child: Text(
-                            errorString,
-                            style: TextStyle(color: Color(0xFFEF476F)),
-                          ),
-                        )
-                      : SingleChildScrollView(
-                          child: Padding(
-                            padding:
-                                const EdgeInsets.symmetric(horizontal: 16.0),
-                            child: HighlightView(
-                              output,
-                              language: 'dart',
-                              theme: atomOneLightTheme,
-                              padding: const EdgeInsets.all(12),
+                    child: output == errorString
+                        ? const Center(
+                            child: Text(
+                              errorString,
+                              style: TextStyle(color: Color(0xFFEF476F)),
                             ),
-                          ),
-                        ),
-                ),
+                          )
+                        : CodeField(
+                            controller: _outPutController,
+                            readOnly: true,
+                            expands: true,
+                            maxLines: null,
+                            minLines: null,
+                            smartQuotesType: SmartQuotesType.enabled,
+                          )
+                    // : SingleChildScrollView(
+                    //     child: Padding(
+                    //       padding:
+                    //           const EdgeInsets.symmetric(horizontal: 16.0),
+                    //       child: HighlightView(
+                    //         output,
+                    //         language: 'Dart',
+                    //         theme: atomOneLightTheme,
+                    //         padding: const EdgeInsets.all(12),
+                    //       ),
+                    //     ),
+                    //   ),
+                    ),
               ],
             ),
           ),
@@ -359,7 +325,7 @@ class _MyHomePageState extends State<MyHomePage> {
               text: TextSpan(
                 children: [
                   const TextSpan(
-                    text: 'by @tungakanui ',
+                    text: 'by @quyenpham ',
                     style: TextStyle(color: Colors.black),
                   ),
                   TextSpan(
