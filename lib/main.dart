@@ -359,16 +359,12 @@ class _MyHomePageState extends State<MyHomePage> {
                           child: Padding(
                             padding:
                                 const EdgeInsets.symmetric(horizontal: 16.0),
-                            child: SelectableRegion(
-                              focusNode: _focusNode,
-                              selectionControls: materialTextSelectionControls,
-                              child: HighlightView(
-                                output,
-                                textSelectable: true,
-                                language: 'dart',
-                                theme: atomOneLightTheme,
-                                padding: const EdgeInsets.all(12),
-                              ),
+                            child: HighlightView(
+                              output,
+                              textSelectable: true,
+                              language: 'dart',
+                              theme: atomOneLightTheme,
+                              padding: const EdgeInsets.all(12),
                             ),
                           ),
                         ),
