@@ -34,7 +34,7 @@ dependencies:
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.2
-  code_text_field: ^1.0.2
+  code_text_field: ^1.1.0
 
 dev_dependencies:
   flutter_test:
@@ -48,8 +48,17 @@ dev_dependencies:
   flutter_lints: ^2.0.0
   recase: ^4.0.0
   url_launcher: ^6.1.5
-  flutter_highlight: ^0.7.0
+
+
   clipboard: ^0.1.3
+
+dependency_overrides:
+  flutter_highlight:
+    git:
+      url: https://github.com/busslina/highlight.dart.git
+      branch: master
+      path: flutter_highlight
+
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

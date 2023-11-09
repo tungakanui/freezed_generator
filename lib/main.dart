@@ -77,16 +77,16 @@ void fromJsonToObject(Map<String, dynamic> json, String className) {
         fields += '@JsonKey(name: "$key") ';
       }
       fields += 'String? ${key.replaceAll("\$", "").camelCase},\n';
-    } else if (json[key] is int) {
-      if (key.contains('_') || key.startsWith(r"$")) {
-        fields += '@JsonKey(name: "$key") ';
-      }
-      fields += 'int? ${key.replaceAll("\$", "").camelCase},\n';
     } else if (json[key] is double) {
       if (key.contains('_') || key.startsWith(r"$")) {
         fields += '@JsonKey(name: "$key") ';
       }
       fields += 'double? ${key.replaceAll("\$", "").camelCase},\n';
+    } else if (json[key] is int) {
+      if (key.contains('_') || key.startsWith(r"$")) {
+        fields += '@JsonKey(name: "$key") ';
+      }
+      fields += 'int? ${key.replaceAll("\$", "").camelCase},\n';
     } else if (json[key] is bool) {
       if (key.contains('_') || key.startsWith(r"$")) {
         fields += '@JsonKey(name: "$key") ';
@@ -214,25 +214,28 @@ class _MyHomePageState extends State<MyHomePage> {
 
   late CodeController _codeController;
 
+  late FocusNode _focusNode;
+
   @override
   void initState() {
     super.initState();
+    _focusNode = FocusNode();
     _codeController = CodeController(
-        text: "",
-        language: yaml,
-        theme: vs2015Theme,
-        onChange: (v) {
-          input = v;
-          try {
-            setState(() {
-              process();
-            });
-          } catch (e) {
-            setState(() {
-              output = errorString;
-            });
-          }
-        });
+      text: "",
+      language: yaml,
+      // onChange: (v) {
+      //   input = v;
+      //   try {
+      //     setState(() {
+      //       process();
+      //     });
+      //   } catch (e) {
+      //     setState(() {
+      //       output = errorString;
+      //     });
+      //   }
+      // }
+    );
   }
 
   void process() {
@@ -318,11 +321,26 @@ class _MyHomePageState extends State<MyHomePage> {
                         ),
                         const SizedBox(height: 12),
                         Expanded(
-                          child: CodeField(
-                            controller: _codeController,
-                            expands: true,
-                            maxLines: null,
-                            minLines: null,
+                          child: CodeTheme(
+                            data: const CodeThemeData(styles: vs2015Theme),
+                            child: CodeField(
+                              controller: _codeController,
+                              onChanged: (v) {
+                                input = v;
+                                try {
+                                  setState(() {
+                                    process();
+                                  });
+                                } catch (e) {
+                                  setState(() {
+                                    output = errorString;
+                                  });
+                                }
+                              },
+                              expands: true,
+                              maxLines: null,
+                              minLines: null,
+                            ),
                           ),
                         ),
                       ],
@@ -341,11 +359,16 @@ class _MyHomePageState extends State<MyHomePage> {
                           child: Padding(
                             padding:
                                 const EdgeInsets.symmetric(horizontal: 16.0),
-                            child: HighlightView(
-                              output,
-                              language: 'dart',
-                              theme: atomOneLightTheme,
-                              padding: const EdgeInsets.all(12),
+                            child: SelectableRegion(
+                              focusNode: _focusNode,
+                              selectionControls: materialTextSelectionControls,
+                              child: HighlightView(
+                                output,
+                                textSelectable: true,
+                                language: 'dart',
+                                theme: atomOneLightTheme,
+                                padding: const EdgeInsets.all(12),
+                              ),
                             ),
                           ),
                         ),
