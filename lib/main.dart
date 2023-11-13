@@ -77,16 +77,20 @@ void fromJsonToObject(Map<String, dynamic> json, String className) {
         fields += '@JsonKey(name: "$key") ';
       }
       fields += 'String? ${key.replaceAll("\$", "").camelCase},\n';
+    } else if (json[key] is int) {
+      if (key.contains('_') || key.startsWith(r"$")) {
+        fields += '@JsonKey(name: "$key") ';
+      }
+      if (json[key].toString().contains('.')) {
+        fields += 'double? ${key.replaceAll("\$", "").camelCase},\n';
+      } else {
+        fields += 'int? ${key.replaceAll("\$", "").camelCase},\n';
+      }
     } else if (json[key] is double) {
       if (key.contains('_') || key.startsWith(r"$")) {
         fields += '@JsonKey(name: "$key") ';
       }
       fields += 'double? ${key.replaceAll("\$", "").camelCase},\n';
-    } else if (json[key] is int) {
-      if (key.contains('_') || key.startsWith(r"$")) {
-        fields += '@JsonKey(name: "$key") ';
-      }
-      fields += 'int? ${key.replaceAll("\$", "").camelCase},\n';
     } else if (json[key] is bool) {
       if (key.contains('_') || key.startsWith(r"$")) {
         fields += '@JsonKey(name: "$key") ';
