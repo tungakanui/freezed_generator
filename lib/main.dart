@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:clipboard/clipboard.dart';
@@ -193,7 +194,7 @@ class {className} with _\${className} {
   }
 
   String _getUniqueClassName(String baseName) {
-    String className = baseName.camelCase.pascalCase;
+    String className = baseName.camelCase.titleCase.replaceAll(' ', '');
 
     if (!_classNames.contains(className)) {
       _classNames.add(className);
@@ -253,7 +254,7 @@ class _MyHomePageState extends State<MyHomePage> {
     }
 
     setState(() {
-      _output = _generator.generate(className.pascalCase, jsonInput);
+      _output = _generator.generate(className.titleCase.replaceAll(' ', ''), jsonInput);
     });
   }
 
@@ -484,9 +485,4 @@ class _MyHomePageState extends State<MyHomePage> {
       ),
     );
   }
-}
-
-// Extension for better string manipulation
-extension StringExtension on String {
-  String get pascalCase => camelCase.substring(0, 1).toUpperCase() + camelCase.substring(1);
 }
