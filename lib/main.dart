@@ -508,7 +508,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
   Widget _buildOutputPanel() {
     if (_output == kErrorString) {
-      return const Center(
+      return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -529,7 +529,7 @@ class _MyHomePageState extends State<MyHomePage> {
     }
 
     if (_output.isEmpty) {
-      return const Center(
+      return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -551,8 +551,8 @@ class _MyHomePageState extends State<MyHomePage> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             color: Colors.white,
-            child: const Row(
-              children: [
+            child: Row(
+              children: const [
                 Icon(Icons.check_circle, color: kGreenColor, size: 20),
                 SizedBox(width: 8),
                 Text(
