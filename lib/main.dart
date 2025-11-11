@@ -69,18 +69,9 @@ class FreezedGenerator {
   final Set<String> _classNames = {};
   final StringBuffer _output = StringBuffer();
 
-  static const String _classTemplate = """
-@freezed
-class {className} with _\${className} {
-  const factory {className}({
-{fields}  }) = _{className};
+  // Build class source safely (avoid interpolation/escape issues in templates)
 
-  factory {className}.fromJson(Map<String, dynamic> json) => 
-      _\${className}FromJson(json);
-}
-""";
-
-  String generate(String className, String jsonString) {
+  String generate(String className, String jsonString, {int freezedVersion = 2}) {
     _classNames.clear();
     _output.clear();
 
@@ -90,9 +81,9 @@ class {className} with _\${className} {
         throw const FormatException('JSON must be an object');
       }
 
-      _writeImports(className);
-      _classNames.add(className);
-      _generateClass(json, className);
+  _writeImports(className, freezedVersion: freezedVersion);
+  _classNames.add(className);
+  _generateClass(json, className, freezedVersion: freezedVersion);
 
       return _output.toString();
     } catch (e) {
@@ -100,29 +91,48 @@ class {className} with _\${className} {
     }
   }
 
-  void _writeImports(String className) {
+  void _writeImports(String className, {int freezedVersion = 2}) {
+    // minimize repeated snakeCase computation
+    final partName = className.snakeCase;
     _output.writeln("import 'package:freezed_annotation/freezed_annotation.dart';");
-    _output.writeln("part '${className.snakeCase}.freezed.dart';");
-    _output.writeln("part '${className.snakeCase}.g.dart';");
+    _output.writeln("part '$partName.freezed.dart';");
+    // Freezed v3 moves away from generating .g.dart files for JSON if
+    // using the new codegen; omit the g.dart part when generating for v3.
+    if (freezedVersion < 3) {
+      _output.writeln("part '$partName.g.dart';");
+    }
     _output.writeln();
   }
 
-  void _generateClass(Map<String, dynamic> json, String className) {
+  void _generateClass(Map<String, dynamic> json, String className, {int freezedVersion = 2}) {
     final fields = <String>[];
 
     json.forEach((key, value) {
-      final field = _processField(key, value);
-      if (field != null) {
-        fields.add(field);
-      }
+      final field = _processField(key, value, freezedVersion: freezedVersion);
+      if (field != null) fields.add(field);
     });
 
-    _output.writeln(_classTemplate
-        .replaceAll('{className}', className)
-        .replaceAll('{fields}', fields.join('\n')));
+    // Build class source directly to avoid escaping/interpolation issues.
+    // Use '\$' to emit a literal dollar sign in the generated Dart code and
+    // concatenate/interpolate the runtime className where needed.
+  _output.writeln('@freezed');
+  // Freezed v3 requires classes using factory constructors to be declared
+  // with a keyword: `abstract` (or `sealed`). We default to `abstract` for v3
+  // and keep `class` for v2 to maintain compatibility.
+  final classKeyword = freezedVersion >= 3 ? 'abstract class' : 'class';
+  _output.writeln('$classKeyword $className with _\$$className {');
+    _output.writeln('  const factory $className({');
+    for (final f in fields) {
+      _output.writeln(f);
+    }
+    _output.writeln('  }) = _$className;');
+    _output.writeln();
+    _output.writeln('  factory $className.fromJson(Map<String, dynamic> json) =>');
+    _output.writeln('      _\$${className}FromJson(json);');
+    _output.writeln('}');
   }
 
-  String? _processField(String key, dynamic value) {
+  String? _processField(String key, dynamic value, {int freezedVersion = 2}) {
     final fieldName = _sanitizeFieldName(key);
     final needsJsonKey = _needsJsonKey(key);
     final prefix = needsJsonKey ? '    @JsonKey(name: "$key") ' : '    ';
@@ -139,69 +149,150 @@ class {className} with _\${className} {
       return '$prefix bool? $fieldName,';
     } else if (value is Map<String, dynamic>) {
       final nestedClassName = _getUniqueClassName(key);
-      _generateClass(value, nestedClassName);
+      _generateClass(value, nestedClassName, freezedVersion: freezedVersion);
       return '$prefix $nestedClassName? $fieldName,';
     } else if (value is List) {
-      return _processList(key, value, fieldName, prefix);
+      return _processList(key, value, fieldName, prefix, freezedVersion);
     }
 
     return null;
   }
 
-  String _processList(String key, List list, String fieldName, String prefix) {
-    if (list.isEmpty) {
-      return '$prefix List<dynamic>? $fieldName,';
-    }
+  String _processList(String key, List list, String fieldName, String prefix, int freezedVersion) {
+    if (list.isEmpty) return '$prefix List<dynamic>? $fieldName,';
 
-    final firstItem = list.first;
-    final listType = _getListType(firstItem, key);
+    // Infer a single best-effort element type from all items in the list
+    final elementType = _getListType(list, key, freezedVersion);
 
-    if (firstItem is Map<String, dynamic>) {
-      // Merge all objects in the list to get all possible fields
-      final mergedMap = _mergeListObjects(list);
-      _generateClass(mergedMap, listType);
-    }
-
-    return '$prefix List<$listType>? $fieldName,';
+    return '$prefix List<$elementType>? $fieldName,';
   }
 
-  Map<String, dynamic> _mergeListObjects(List list) {
-    final merged = <String, dynamic>{};
+  String _getListType(List list, String key, int freezedVersion) {
+    if (list.isEmpty) return 'dynamic';
+
+    // Track discovered primitive types, nested list types and maps
+    final primitiveTypes = <String>{};
+    final nestedInnerTypes = <String>{};
+    Map<String, dynamic> mergedMap = {};
+    var sawMap = false;
+
     for (final item in list) {
-      if (item is Map<String, dynamic>) {
-        merged.addAll(item);
-      }
-    }
-    return merged;
-  }
+      if (item == null) continue;
 
-  String _getListType(dynamic item, String key) {
-    if (item is String) return 'String';
-    if (item is int) return 'int';
-    if (item is double) return 'double';
-    if (item is bool) return 'bool';
-    if (item is List) return 'List<dynamic>';
-    if (item is Map) return _getUniqueClassName(key);
+      if (item is String) {
+        primitiveTypes.add('String');
+        continue;
+      }
+
+      if (item is int) {
+        primitiveTypes.add('int');
+        continue;
+      }
+
+      if (item is double) {
+        primitiveTypes.add('double');
+        continue;
+      }
+
+      if (item is bool) {
+        primitiveTypes.add('bool');
+        continue;
+      }
+
+      if (item is List) {
+        // Recursively infer inner type
+        final inner = _getListType(item, key, freezedVersion);
+        nestedInnerTypes.add(inner);
+        continue;
+      }
+
+      if (item is Map<String, dynamic>) {
+        sawMap = true;
+        mergedMap.addAll(item);
+        continue;
+      }
+
+      // Fallback for unknown types
+      primitiveTypes.add('dynamic');
+    }
+
+    // If we found maps and nothing else, generate a class from merged fields
+    if (sawMap && primitiveTypes.isEmpty && nestedInnerTypes.isEmpty) {
+      final className = _getUniqueClassName(key);
+      _generateClass(mergedMap, className, freezedVersion: freezedVersion);
+      return className;
+    }
+
+    // Mixed maps with other types -> fallback to dynamic
+    if (sawMap && (primitiveTypes.isNotEmpty || nestedInnerTypes.isNotEmpty)) {
+      return 'dynamic';
+    }
+
+    // If we have nested list types, try to unify them
+    if (nestedInnerTypes.isNotEmpty) {
+      if (nestedInnerTypes.length == 1) {
+        final inner = nestedInnerTypes.first;
+        return 'List<$inner>';
+      }
+      return 'List<dynamic>';
+    }
+
+    // Handle primitive types unification
+    if (primitiveTypes.isNotEmpty) {
+      // int + double -> double
+      if (primitiveTypes.length == 2 && primitiveTypes.contains('int') && primitiveTypes.contains('double')) {
+        return 'double';
+      }
+
+      if (primitiveTypes.length == 1) return primitiveTypes.first;
+
+      // Multiple different primitive types -> dynamic
+      return 'dynamic';
+    }
+
+    // Default fallback
     return 'dynamic';
   }
 
   String _sanitizeFieldName(String key) {
-    return key.replaceAll(r'$', '').camelCase;
+    // Remove characters that can't appear in Dart identifiers and convert to camelCase
+    var sanitized = key.replaceAll(RegExp(r"[^A-Za-z0-9_]"), '');
+    // If name starts with digit, prefix with underscore
+    if (sanitized.isNotEmpty && RegExp(r'^[0-9]').hasMatch(sanitized)) {
+      sanitized = '_$sanitized';
+    }
+    return sanitized.camelCase;
   }
 
   bool _needsJsonKey(String key) {
-    return key.contains('_') || key.startsWith(r'$');
+    // Need explicit JsonKey if the key isn't a valid Dart identifier or contains underscore
+    return RegExp(r'[^A-Za-z0-9]').hasMatch(key) || key.contains('_') || key.startsWith(r'$');
   }
 
   String _getUniqueClassName(String baseName) {
-    String className = baseName.camelCase.titleCase.replaceAll(' ', '');
+    // Try to convert plural keys to a reasonable singular form for class names.
+    var candidate = baseName;
+    final low = candidate.toLowerCase();
+    if (low.endsWith('ies') && candidate.length > 3) {
+      // companies -> company
+      candidate = '${candidate.substring(0, candidate.length - 3)}y';
+    } else if ((low.endsWith('ses') || low.endsWith('xes') || low.endsWith('ches') || low.endsWith('shes') || low.endsWith('zes')) && candidate.length > 2) {
+      // boxes -> box, matches -> match
+      candidate = candidate.substring(0, candidate.length - 2);
+    } else if (low.endsWith('s') && !low.endsWith('ss') && candidate.length > 1) {
+      // departments -> department (naive)
+      candidate = candidate.substring(0, candidate.length - 1);
+    }
+
+    var className = candidate.camelCase.titleCase.replaceAll(' ', '');
+    if (className.isEmpty) className = 'AutoGenerated';
 
     if (!_classNames.contains(className)) {
       _classNames.add(className);
       return className;
     }
 
-    int counter = 2;
+    var counter = 2;
     while (_classNames.contains('$className$counter')) {
       counter++;
     }
@@ -226,6 +317,8 @@ class _MyHomePageState extends State<MyHomePage> {
 
   String _output = '';
   Timer? _debounceTimer;
+  int _freezedVersion = 2; // default to v2 for backward compatibility
+  
 
   @override
   void initState() {
@@ -244,6 +337,8 @@ class _MyHomePageState extends State<MyHomePage> {
     super.dispose();
   }
 
+ 
+
   void _generateCode() {
     final className = _classNameController.text.trim();
     final jsonInput = _codeController.text.trim();
@@ -254,7 +349,7 @@ class _MyHomePageState extends State<MyHomePage> {
     }
 
     setState(() {
-      _output = _generator.generate(className.titleCase.replaceAll(' ', ''), jsonInput);
+      _output = _generator.generate(className.titleCase.replaceAll(' ', ''), jsonInput, freezedVersion: _freezedVersion);
     });
   }
 
@@ -262,6 +357,8 @@ class _MyHomePageState extends State<MyHomePage> {
     _debounceTimer?.cancel();
     _debounceTimer = Timer(const Duration(milliseconds: 300), _generateCode);
   }
+
+  
 
   void _copyToClipboard() {
     if (_output.isEmpty || _output == kErrorString) return;
@@ -323,7 +420,7 @@ class _MyHomePageState extends State<MyHomePage> {
             shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(
-                color: kGreenColor.withOpacity(0.3),
+                color: kGreenColor.withAlpha(77),
                 blurRadius: 12,
                 offset: const Offset(0, 4),
               ),
@@ -360,6 +457,30 @@ class _MyHomePageState extends State<MyHomePage> {
             ),
             onChanged: (_) => _onInputChanged(),
           ),
+          const SizedBox(height: 8),
+          // Freezed version selector
+          Row(
+            children: [
+              const Text('Freezed version:', style: TextStyle(color: Colors.white70)),
+              const SizedBox(width: 12),
+              DropdownButton<int>(
+                value: _freezedVersion,
+                dropdownColor: kBlueColor,
+                style: const TextStyle(color: Colors.white),
+                items: const [
+                  DropdownMenuItem(value: 2, child: Text('v2')),
+                  DropdownMenuItem(value: 3, child: Text('v3')),
+                ],
+                onChanged: (v) {
+                  if (v == null) return;
+                  setState(() {
+                    _freezedVersion = v;
+                  });
+                  _onInputChanged();
+                },
+              ),
+            ],
+          ),
           const SizedBox(height: 16),
           Expanded(
             child: Container(
@@ -387,10 +508,10 @@ class _MyHomePageState extends State<MyHomePage> {
 
   Widget _buildOutputPanel() {
     if (_output == kErrorString) {
-      return Center(
+      return const Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: const [
+          children: [
             Icon(Icons.error_outline, color: kRedColor, size: 48),
             SizedBox(height: 16),
             Text(
@@ -408,10 +529,10 @@ class _MyHomePageState extends State<MyHomePage> {
     }
 
     if (_output.isEmpty) {
-      return Center(
+      return const Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: const [
+          children: [
             Icon(Icons.code, color: Colors.grey, size: 48),
             SizedBox(height: 16),
             Text(
@@ -430,8 +551,8 @@ class _MyHomePageState extends State<MyHomePage> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             color: Colors.white,
-            child: Row(
-              children: const [
+            child: const Row(
+              children: [
                 Icon(Icons.check_circle, color: kGreenColor, size: 20),
                 SizedBox(width: 8),
                 Text(
@@ -447,6 +568,7 @@ class _MyHomePageState extends State<MyHomePage> {
               child: HighlightView(
                 _output,
                 language: 'dart',
+                textSelectable: true,
                 theme: atomOneLightTheme,
                 padding: const EdgeInsets.all(16),
                 textStyle: const TextStyle(fontSize: 14),
