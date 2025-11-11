@@ -11,6 +11,7 @@ import 'package:flutter_highlight/themes/atom-one-light.dart';
 import 'package:flutter_highlight/themes/vs2015.dart';
 import 'package:highlight/languages/yaml.dart';
 import 'package:recase/recase.dart';
+import 'package:pluralize/pluralize.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 void main() {
@@ -67,6 +68,8 @@ class FreezedField {
 // Generator class with optimized logic
 class FreezedGenerator {
   final Set<String> _classNames = {};
+  final Map<String, String> _signatureToClass = {};
+  final Pluralize _pluralize = Pluralize();
   final StringBuffer _output = StringBuffer();
 
   // Build class source safely (avoid interpolation/escape issues in templates)
@@ -148,8 +151,7 @@ class FreezedGenerator {
     } else if (value is bool) {
       return '$prefix bool? $fieldName,';
     } else if (value is Map<String, dynamic>) {
-      final nestedClassName = _getUniqueClassName(key);
-      _generateClass(value, nestedClassName, freezedVersion: freezedVersion);
+      final nestedClassName = _getClassNameForMap(value, key, freezedVersion);
       return '$prefix $nestedClassName? $fieldName,';
     } else if (value is List) {
       return _processList(key, value, fieldName, prefix, freezedVersion);
@@ -218,8 +220,8 @@ class FreezedGenerator {
 
     // If we found maps and nothing else, generate a class from merged fields
     if (sawMap && primitiveTypes.isEmpty && nestedInnerTypes.isEmpty) {
-      final className = _getUniqueClassName(key);
-      _generateClass(mergedMap, className, freezedVersion: freezedVersion);
+      // Merge map fields and deduplicate by structure/signature
+      final className = _getClassNameForMap(mergedMap, key, freezedVersion);
       return className;
     }
 
@@ -254,6 +256,49 @@ class FreezedGenerator {
     return 'dynamic';
   }
 
+  String _signatureForValue(dynamic v) {
+    if (v == null) return 'null';
+    if (v is String) return 'String';
+    if (v is int) return 'int';
+    if (v is double) return 'double';
+    if (v is bool) return 'bool';
+    if (v is List) {
+      final inner = <String>{};
+      for (final item in v) {
+        inner.add(_signatureForValue(item));
+      }
+      if (inner.isEmpty) return 'List<dynamic>';
+      if (inner.length == 1) return 'List<${inner.first}>';
+      return 'List<dynamic>';
+    }
+    if (v is Map<String, dynamic>) {
+      return 'Map(${_signatureForMap(v)})';
+    }
+    return 'dynamic';
+  }
+
+  String _signatureForMap(Map<String, dynamic> map) {
+    final keys = map.keys.toList()..sort();
+    final parts = <String>[];
+    for (final k in keys) {
+      final sig = _signatureForValue(map[k]);
+      parts.add('$k:$sig');
+    }
+    return parts.join(';');
+  }
+
+  String _getClassNameForMap(Map<String, dynamic> map, String baseName, int freezedVersion) {
+    final sig = _signatureForMap(map);
+    if (_signatureToClass.containsKey(sig)) {
+      return _signatureToClass[sig]!;
+    }
+
+    final candidate = _getUniqueClassName(baseName);
+    _signatureToClass[sig] = candidate;
+    _generateClass(map, candidate, freezedVersion: freezedVersion);
+    return candidate;
+  }
+
   String _sanitizeFieldName(String key) {
     // Remove characters that can't appear in Dart identifiers and convert to camelCase
     var sanitized = key.replaceAll(RegExp(r"[^A-Za-z0-9_]"), '');
@@ -270,18 +315,13 @@ class FreezedGenerator {
   }
 
   String _getUniqueClassName(String baseName) {
-    // Try to convert plural keys to a reasonable singular form for class names.
+    // Use the pluralize package to get a reasonable singular form for class names.
     var candidate = baseName;
-    final low = candidate.toLowerCase();
-    if (low.endsWith('ies') && candidate.length > 3) {
-      // companies -> company
-      candidate = '${candidate.substring(0, candidate.length - 3)}y';
-    } else if ((low.endsWith('ses') || low.endsWith('xes') || low.endsWith('ches') || low.endsWith('shes') || low.endsWith('zes')) && candidate.length > 2) {
-      // boxes -> box, matches -> match
-      candidate = candidate.substring(0, candidate.length - 2);
-    } else if (low.endsWith('s') && !low.endsWith('ss') && candidate.length > 1) {
-      // departments -> department (naive)
-      candidate = candidate.substring(0, candidate.length - 1);
+    try {
+      candidate = _pluralize.singular(candidate);
+    } catch (_) {
+      // Fallback to original heuristics if pluralize fails for any reason
+      candidate = baseName;
     }
 
     var className = candidate.camelCase.titleCase.replaceAll(' ', '');
